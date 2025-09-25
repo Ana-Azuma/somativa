@@ -135,16 +135,39 @@ export const useMaintenanceStore = defineStore('maintenance', {
     },
 
     updateMaintenance(id, updates) {
-      const maintenance = this.maintenances.find(m => m.id === id)
+      // Procura nas manutenções regulares
+      let maintenance = this.maintenances.find(m => m.id === id)
       if (maintenance) {
         Object.assign(maintenance, updates)
+        return
+      }
+      
+      // Procura nas manutenções agendadas
+      maintenance = this.scheduledMaintenances.find(m => m.id === id)
+      if (maintenance) {
+        Object.assign(maintenance, updates)
+        
+        // Se mudou de Agendada para outro status, move para maintenances
+        if (updates.status && updates.status !== 'Agendada') {
+          const index = this.scheduledMaintenances.findIndex(m => m.id === id)
+          this.scheduledMaintenances.splice(index, 1)
+          this.maintenances.push(maintenance)
+        }
       }
     },
 
     deleteMaintenance(id) {
-      const index = this.maintenances.findIndex(m => m.id === id)
+      // Tenta deletar das manutenções regulares
+      let index = this.maintenances.findIndex(m => m.id === id)
       if (index > -1) {
         this.maintenances.splice(index, 1)
+        return
+      }
+      
+      // Tenta deletar das agendadas
+      index = this.scheduledMaintenances.findIndex(m => m.id === id)
+      if (index > -1) {
+        this.scheduledMaintenances.splice(index, 1)
       }
     },
 
