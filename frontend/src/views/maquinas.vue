@@ -36,7 +36,7 @@
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       <div 
         v-for="machine in store.machines" 
-        :key="machine.id"
+        :key="machine.id || machine._id"
         class="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow"
       >
         <!-- Header do Card -->
@@ -84,7 +84,7 @@
                 Próxima Manutenção
               </label>
               <p class="mt-1 text-gray-900">
-                {{ getNextMaintenanceDate(machine.id) }}
+                {{ getNextMaintenanceDate(machine.id || machine._id) }}
               </p>
             </div>
           </div>
@@ -126,7 +126,7 @@
 </template>
 
 <script>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue' // ✅ ADICIONEI onMounted AQUI
 import { useMaintenanceStore } from '../store'
 import KpiCard from '../components/KpiCard.vue'
 import MachineHistoryModal from '../components/MachineHistoryModal.vue'
@@ -146,6 +146,14 @@ export default {
     const showScheduleModal = ref(false)
     const selectedMachine = ref(null)
     const newMaintenance = ref(null)
+    
+    // ✅ ADICIONEI ESTE BLOCO AQUI - BUSCA OS DADOS DO BACKEND
+    onMounted(async () => {
+      await Promise.all([
+        store.fetchMachines(),
+        store.fetchMaintenances()
+      ])
+    })
     
     const getStatusColor = (status) => {
       const colors = {
@@ -193,7 +201,7 @@ export default {
     
     const scheduleMaintenance = (machine) => {
       newMaintenance.value = {
-        machineId: machine.id,
+        machineId: machine.id || machine._id,
         machine: machine.name,
         sector: machine.sector,
         status: 'Agendada',
@@ -207,8 +215,8 @@ export default {
       newMaintenance.value = null
     }
     
-    const saveScheduledMaintenance = (maintenanceData) => {
-      store.addMaintenance(maintenanceData)
+    const saveScheduledMaintenance = async (maintenanceData) => {
+      await store.addMaintenance(maintenanceData)
       closeScheduleModal()
     }
     

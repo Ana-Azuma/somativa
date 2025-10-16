@@ -95,7 +95,7 @@
           <div class="space-y-1">
             <div 
               v-for="maintenance in day.maintenances" 
-              :key="maintenance.id"
+              :key="maintenance.id || maintenance._id"
               @click="viewMaintenance(maintenance)"
               class="text-xs p-1 rounded cursor-pointer hover:opacity-75 transition-opacity"
               :class="getMaintenanceStyle(maintenance.status)"
@@ -125,7 +125,7 @@
         <div class="space-y-3">
           <div 
             v-for="maintenance in selectedDayMaintenances" 
-            :key="maintenance.id"
+            :key="maintenance.id || maintenance._id"
             @click="viewMaintenance(maintenance)"
             class="flex items-center justify-between p-4 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors"
           >
@@ -165,7 +165,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue' // ✅ ADICIONEI onMounted AQUI
 import { useMaintenanceStore } from '../store'
 import ViewMaintenanceModal from '../components/ViewMaintenanceModal.vue'
 
@@ -183,6 +183,15 @@ export default {
     const selectedMaintenance = ref(null)
     
     const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+    
+    // ✅ ADICIONEI ESTE BLOCO AQUI - BUSCA OS DADOS DO BACKEND
+    onMounted(async () => {
+      await Promise.all([
+        store.fetchMachines(),
+        store.fetchMaintenances()
+      ])
+      selectedDate.value = new Date()
+    })
     
     const currentMonthYear = computed(() => {
       return currentDate.value.toLocaleDateString('pt-BR', {
@@ -298,11 +307,6 @@ export default {
       selectedMaintenance.value = maintenance
       showViewModal.value = true
     }
-    
-    // Seleciona hoje por padrão
-    onMounted(() => {
-      selectedDate.value = new Date()
-    })
     
     return {
       currentDate,

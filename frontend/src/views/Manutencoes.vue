@@ -27,7 +27,7 @@
             class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">Todas as máquinas</option>
-            <option v-for="machine in store.machines" :key="machine.id" :value="machine.name">
+            <option v-for="machine in store.machines" :key="machine.id || machine._id" :value="machine.name">
               {{ machine.name }}
             </option>
           </select>
@@ -106,11 +106,11 @@
           <tbody class="bg-white divide-y divide-gray-200">
             <tr 
               v-for="maintenance in filteredMaintenances" 
-              :key="maintenance.id"
+              :key="maintenance.id || maintenance._id"
               class="hover:bg-gray-50"
             >
               <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                #{{ String(maintenance.id).padStart(3, '0') }}
+                #{{ String(maintenance.id || maintenance._id).padStart(3, '0') }}
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                 {{ maintenance.machine }}
@@ -146,7 +146,7 @@
                   Editar
                 </button>
                 <button
-                  @click="deleteMaintenance(maintenance.id)"
+                  @click="deleteMaintenance(maintenance.id || maintenance._id)"
                   class="text-red-600 hover:text-red-900"
                 >
                   Excluir
@@ -176,7 +176,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue' // ✅ ADICIONEI onMounted AQUI
 import { useMaintenanceStore } from '../store'
 import MaintenanceModal from '../components/MaintenanceModal.vue'
 import ViewMaintenanceModal from '../components/ViewMaintenanceModal.vue'
@@ -198,6 +198,14 @@ export default {
       machine: '',
       status: '',
       sector: ''
+    })
+    
+    // ✅ ADICIONEI ESTE BLOCO AQUI - BUSCA OS DADOS DO BACKEND
+    onMounted(async () => {
+      await Promise.all([
+        store.fetchMachines(),
+        store.fetchMaintenances()
+      ])
     })
     
     const filteredMaintenances = computed(() => {
@@ -250,9 +258,9 @@ export default {
       showModal.value = true
     }
     
-    const deleteMaintenance = (id) => {
+    const deleteMaintenance = async (id) => {
       if (confirm('Tem certeza que deseja excluir esta manutenção?')) {
-        store.deleteMaintenance(id)
+        await store.deleteMaintenance(id)
       }
     }
     
@@ -261,11 +269,11 @@ export default {
       selectedMaintenance.value = null
     }
     
-    const saveMaintenance = (maintenanceData) => {
-      if (selectedMaintenance.value && selectedMaintenance.value.id) {
-        store.updateMaintenance(selectedMaintenance.value.id, maintenanceData)
+    const saveMaintenance = async (maintenanceData) => {
+      if (selectedMaintenance.value && (selectedMaintenance.value.id || selectedMaintenance.value._id)) {
+        await store.updateMaintenance(selectedMaintenance.value.id || selectedMaintenance.value._id, maintenanceData)
       } else {
-        store.addMaintenance(maintenanceData)
+        await store.addMaintenance(maintenanceData)
       }
       closeModal()
     }
