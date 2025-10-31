@@ -139,7 +139,7 @@ export default {
     
     const form = ref({
       machineId: '',
-      machine: '',
+      machineName: '',
       date: new Date().toISOString().split('T')[0],
       technician: '',
       type: '',
@@ -164,7 +164,7 @@ export default {
       console.log('🟡 Máquina encontrada:', machine)
       
       if (machine) {
-        form.value.machine = machine.name
+        form.value.machineName = machine.name
         form.value.sector = machine.sector
       }
     }
@@ -178,8 +178,20 @@ export default {
         return
       }
       
-      console.log('🟢 Emitindo save com:', form.value)
-      emit('save', { ...form.value })
+      // ✅ CORREÇÃO PRINCIPAL: Mapeia os campos corretamente para o backend
+      const maintenanceData = {
+        machine: form.value.machineId,        // ✅ Backend espera 'machine' (ID)
+        machineName: form.value.machineName,  // Nome da máquina
+        date: form.value.date,
+        technician: form.value.technician,
+        type: form.value.type,
+        status: form.value.status,
+        description: form.value.description,
+        sector: form.value.sector
+      }
+      
+      console.log('🟢 Emitindo save com:', maintenanceData)
+      emit('save', maintenanceData)
     }
     
     // Preenche o formulário quando está editando
@@ -188,8 +200,8 @@ export default {
       
       if (maintenance) {
         form.value = {
-          machineId: maintenance.machineId || '',
-          machine: maintenance.machine || '',
+          machineId: maintenance.machineId || maintenance.machine || '',
+          machineName: maintenance.machineName || maintenance.machine || '',
           date: maintenance.date || new Date().toISOString().split('T')[0],
           technician: maintenance.technician || '',
           type: maintenance.type || '',

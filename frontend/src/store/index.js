@@ -1,9 +1,9 @@
 import { defineStore } from 'pinia'
 import machineService from '../services/machineService'
+import maintenanceService from '../services/maintenanceService'
 
 export const useMaintenanceStore = defineStore('maintenance', {
   state: () => ({
-    // Começa vazio e busca do MongoDB
     machines: [],
     maintenances: [],
     scheduledMaintenances: [],
@@ -58,7 +58,6 @@ export const useMaintenanceStore = defineStore('maintenance', {
   },
 
   actions: {
-    // ✅ Busca máquinas do MongoDB
     async fetchMachines() {
       this.loading = true
       this.error = null
@@ -66,46 +65,62 @@ export const useMaintenanceStore = defineStore('maintenance', {
       try {
         const response = await machineService.getAll()
         this.machines = response.data.data
+        console.log('✅ Máquinas carregadas:', this.machines.length)
         return response.data
       } catch (error) {
         this.error = 'Erro ao buscar máquinas'
-        console.error('Erro ao buscar máquinas:', error)
+        console.error('❌ Erro ao buscar máquinas:', error)
         throw error
       } finally {
         this.loading = false
       }
     },
 
-    // ✅ Busca manutenções do MongoDB
     async fetchMaintenances() {
       this.loading = true
       this.error = null
       
       try {
-        // Por enquanto mantém dados mockados
-        // Quando criar maintenanceService, descomente e use:
-        // const response = await maintenanceService.getAll()
-        // this.maintenances = response.data.data.filter(m => m.status !== 'Agendada')
-        // this.scheduledMaintenances = response.data.data.filter(m => m.status === 'Agendada')
+        const response = await maintenanceService.getAll()
+        
+        if (response.data && response.data.data) {
+          // Separa manutenções agendadas das demais
+          const allMaintenances = response.data.data
+          
+          this.maintenances = allMaintenances.filter(m => m.status !== 'Agendada')
+          this.scheduledMaintenances = allMaintenances.filter(m => m.status === 'Agendada')
+          
+          console.log('✅ Manutenções carregadas:', {
+            total: allMaintenances.length,
+            regulares: this.maintenances.length,
+            agendadas: this.scheduledMaintenances.length
+          })
+          
+          // Log das agendadas para debug
+          console.log('📅 Manutenções Agendadas:', this.scheduledMaintenances)
+        } else {
+          this.maintenances = []
+          this.scheduledMaintenances = []
+        }
+        
+        return response.data
+      } catch (error) {
+        this.error = 'Erro ao buscar manutenções'
+        console.error('❌ Erro ao buscar manutenções:', error)
         
         this.maintenances = []
         this.scheduledMaintenances = []
         
-      } catch (error) {
-        this.error = 'Erro ao buscar manutenções'
-        console.error('Erro ao buscar manutenções:', error)
         throw error
       } finally {
         this.loading = false
       }
     },
 
-    // ✅ Atualiza status de uma máquina específica
     async updateMachineStatus(machineId, status) {
       try {
         const response = await machineService.updateStatus(machineId, status)
         
-        // Atualiza a máquina localmente
         const machine = this.machines.find(m => m._id === machineId || m.id === machineId)
         if (machine) {
           machine.status = status
@@ -113,62 +128,98 @@ export const useMaintenanceStore = defineStore('maintenance', {
         
         return response.data
       } catch (error) {
-        console.error('Erro ao atualizar status:', error)
+        console.error('❌ Erro ao atualizar status:', error)
         throw error
       }
     },
 
-    addMaintenance(maintenance) {
-      const newMaintenance = {
-        id: Date.now(),
-        ...maintenance,
-        date: new Date().toISOString().split('T')[0]
-      }
+    // ✅ CORRIGIDO: Não sobrescreve a data!
+    async addMaintenance(maintenanceData) {
+      this.loading = true
+      this.error = null
       
-      this.maintenances.push(newMaintenance)
-      
-      // Atualiza status da máquina
-      const machine = this.machines.find(m => (m.id || m._id) === maintenance.machineId)
-      if (machine) {
-        machine.lastMaintenance = newMaintenance.date
-        machine.status = 'verde'
-      }
-    },
-
-    updateMaintenance(id, updates) {
-      // Procura nas manutenções regulares
-      let maintenance = this.maintenances.find(m => m.id === id)
-      if (maintenance) {
-        Object.assign(maintenance, updates)
-        return
-      }
-      
-      // Procura nas manutenções agendadas
-      maintenance = this.scheduledMaintenances.find(m => m.id === id)
-      if (maintenance) {
-        Object.assign(maintenance, updates)
+      try {
+        console.log('🔵 [STORE] addMaintenance - Dados recebidos:', maintenanceData)
         
-        // Se mudou de Agendada para outro status, move para maintenances
-        if (updates.status && updates.status !== 'Agendada') {
-          const index = this.scheduledMaintenances.findIndex(m => m.id === id)
-          this.scheduledMaintenances.splice(index, 1)
-          this.maintenances.push(maintenance)
+        // ✅ NÃO sobrescreve a data! Usa a data que vem do formulário
+        const response = await maintenanceService.create(maintenanceData)
+        
+        console.log('🔵 [STORE] Resposta do backend:', response.data)
+        
+        if (response.data && response.data.data) {
+          const newMaintenance = response.data.data
+          
+          console.log('🔵 [STORE] Manutenção criada:', newMaintenance)
+          console.log('🔵 [STORE] Data salva:', newMaintenance.date)
+          console.log('🔵 [STORE] Status:', newMaintenance.status)
+          console.log('🔵 [STORE] MachineId:', newMaintenance.machineId)
+          
+          // ✅ RELOAD completo após adicionar
+          console.log('🔄 [STORE] Recarregando manutenções...')
+          await this.fetchMaintenances()
+          
+          console.log('✅ [STORE] Manutenção adicionada e dados recarregados!')
+          console.log('📊 [STORE] Total agendadas:', this.scheduledMaintenances.length)
+          
+          return response.data
         }
+        
+      } catch (error) {
+        this.error = 'Erro ao adicionar manutenção'
+        console.error('❌ [STORE] Erro ao adicionar manutenção:', error)
+        throw error
+      } finally {
+        this.loading = false
       }
     },
 
-    deleteMaintenance(id) {
-      // Tenta deletar das manutenções regulares
-      let index = this.maintenances.findIndex(m => m.id === id)
-      if (index > -1) {
-        this.maintenances.splice(index, 1)
-        return
-      }
+    async updateMaintenance(id, updates) {
+      this.loading = true
+      this.error = null
       
-      // Tenta deletar das agendadas
-      index = this.scheduledMaintenances.findIndex(m => m.id === id)
-      if (index > -1) {
-        this.scheduledMaintenances.splice(index, 1)
+      try {
+        console.log('🔵 [STORE] updateMaintenance - ID:', id, 'Updates:', updates)
+        
+        const response = await maintenanceService.update(id, updates)
+        
+        console.log('🔵 [STORE] Manutenção atualizada:', response.data)
+        
+        // ✅ RELOAD após atualizar
+        await this.fetchMaintenances()
+        
+        console.log('✅ [STORE] Manutenção atualizada e dados recarregados!')
+        
+        return response.data
+        
+      } catch (error) {
+        this.error = 'Erro ao atualizar manutenção'
+        console.error('❌ [STORE] Erro ao atualizar manutenção:', error)
+        throw error
+      } finally {
+        this.loading = false
+      }
+    },
+
+    async deleteMaintenance(id) {
+      this.loading = true
+      this.error = null
+      
+      try {
+        console.log('🔵 [STORE] deleteMaintenance - ID:', id)
+        
+        await maintenanceService.delete(id)
+        
+        // ✅ RELOAD após deletar
+        await this.fetchMaintenances()
+        
+        console.log('✅ [STORE] Manutenção deletada e dados recarregados!')
+        
+      } catch (error) {
+        this.error = 'Erro ao deletar manutenção'
+        console.error('❌ [STORE] Erro ao deletar manutenção:', error)
+        throw error
+      } finally {
+        this.loading = false
       }
     },
 
@@ -177,7 +228,15 @@ export const useMaintenanceStore = defineStore('maintenance', {
     },
 
     getMaintenancesByMachine(machineId) {
-      return this.allMaintenances.filter(m => m.machineId === machineId)
+      const allMaint = this.allMaintenances
+      const filtered = allMaint.filter(m => {
+        const mId = m.machineId || m.machine
+        return mId === machineId || mId?.toString() === machineId?.toString()
+      })
+      
+      console.log(`🔍 [STORE] Manutenções da máquina ${machineId}:`, filtered.length)
+      
+      return filtered
     }
   }
 })

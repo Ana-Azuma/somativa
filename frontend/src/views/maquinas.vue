@@ -56,7 +56,7 @@
         <!-- Conteúdo do Card -->
         <div class="p-6">
           <div class="space-y-3">
-            <!-- ✅ Dropdown para alterar status -->
+            <!-- Dropdown para alterar status -->
             <div>
               <label class="text-sm font-medium text-gray-500">
                 Atualizar Status
@@ -71,7 +71,6 @@
                 <option value="amarelo">🟡 Atenção</option>
                 <option value="vermelho">🔴 Crítico</option>
               </select>
-              <!-- Feedback de loading -->
               <p v-if="loadingMachines[machine._id || machine.id]" class="mt-1 text-xs text-blue-600">
                 Salvando...
               </p>
@@ -107,8 +106,8 @@
               <label class="text-sm font-medium text-gray-500">
                 Próxima Manutenção
               </label>
-              <p class="mt-1 text-gray-900">
-                {{ getNextMaintenanceDate(machine.id || machine._id) }}
+              <p class="mt-1 font-semibold text-gray-900">
+                {{ getNextMaintenanceDate(machine._id || machine.id) }}
               </p>
             </div>
           </div>
@@ -172,54 +171,38 @@ export default {
     const selectedMachine = ref(null)
     const newMaintenance = ref(null)
     
-    // Controle de loading e sucesso para cada máquina
     const loadingMachines = reactive({})
     const successMachines = reactive({})
     
-    // Busca os dados do backend ao carregar a página
     onMounted(async () => {
       console.log('🟢 MOUNTED - Carregando dados...')
       await Promise.all([
         store.fetchMachines(),
         store.fetchMaintenances()
       ])
-      console.log('🟢 DADOS CARREGADOS:', store.machines)
+      console.log('🟢 DADOS CARREGADOS')
+      console.log('- Máquinas:', store.machines.length)
+      console.log('- Manutenções:', store.allMaintenances.length)
+      console.log('- Agendadas:', store.scheduledMaintenances.length)
     })
     
-    // ✅ Atualiza o status no MongoDB - COM DEBUG
     const updateMachineStatus = async (machine) => {
-      console.log('🔵 FUNÇÃO CHAMADA! Machine:', machine)
-      alert('FUNÇÃO FOI CHAMADA! ID: ' + (machine._id || machine.id))
-      
-      // Funciona com id OU _id
       const machineId = machine._id || machine.id
-      
-      console.log('🔵 MACHINE ID:', machineId)
-      console.log('🔵 NOVO STATUS:', machine.status)
       
       if (!machineId) {
         alert('Erro: ID da máquina não encontrado')
         return
       }
       
-      // Ativa loading
       loadingMachines[machineId] = true
       successMachines[machineId] = false
       
       try {
-        console.log('🔵 Chamando API...')
-        // Chama a API para salvar no MongoDB
         await machineService.updateStatus(machineId, machine.status)
-        
-        console.log('🔵 API respondeu com sucesso!')
-        
-        // Atualiza a store (Pinia)
         await store.fetchMachines()
         
-        // Mostra mensagem de sucesso
         successMachines[machineId] = true
         
-        // Remove a mensagem após 2 segundos
         setTimeout(() => {
           successMachines[machineId] = false
         }, 2000)
@@ -228,7 +211,6 @@ export default {
         console.error('❌ Erro ao atualizar status:', error)
         alert('Erro ao salvar o status. Tente novamente.')
       } finally {
-        // Desativa loading
         loadingMachines[machineId] = false
       }
     }
@@ -261,15 +243,86 @@ export default {
     }
     
     const formatDate = (date) => {
+      if (!date) return 'Não realizada'
       return new Date(date).toLocaleDateString('pt-BR')
     }
     
+    // ✅ VERSÃO FINAL CORRIGIDA - getNextMaintenanceDate
     const getNextMaintenanceDate = (machineId) => {
-      const nextMaintenance = store.scheduledMaintenances
-        .filter(m => m.machineId === machineId)
-        .sort((a, b) => new Date(a.date) - new Date(b.date))[0]
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+      console.log('🔍 [NEXT] Buscando próxima manutenção')
+      console.log('🔍 [NEXT] MachineId:', machineId)
+      console.log('🔍 [NEXT] Tipo:', typeof machineId)
       
-      return nextMaintenance ? formatDate(nextMaintenance.date) : 'Não agendada'
+      // ✅ Converte scheduledMaintenances para array normal
+      const scheduled = Array.from(store.scheduledMaintenances || [])
+      
+      console.log('📋 [NEXT] Total de agendadas:', scheduled.length)
+      console.log('📋 [NEXT] Lista completa:', scheduled)
+      
+      if (scheduled.length === 0) {
+        console.log('❌ [NEXT] Nenhuma manutenção agendada no sistema')
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+        return 'Não agendada'
+      }
+      
+      // ✅ Converte machineId para string para comparação
+      const machineIdStr = String(machineId)
+      
+      console.log('🔍 [NEXT] Procurando manutenções para:', machineIdStr)
+      
+      // ✅ Filtra manutenções desta máquina
+      const forThisMachine = scheduled.filter(m => {
+        // Extrai o ID da máquina (pode estar em diferentes campos)
+        let mId = null
+        
+        if (m.machineId) {
+          mId = String(m.machineId)
+        } else if (m.machine) {
+          // Se machine for um objeto
+          if (typeof m.machine === 'object' && m.machine._id) {
+            mId = String(m.machine._id)
+          } else {
+            mId = String(m.machine)
+          }
+        }
+        
+        const match = mId === machineIdStr
+        
+        if (match) {
+          console.log('✅ [NEXT] MATCH encontrado!')
+          console.log('   - Manutenção:', m)
+          console.log('   - ID comparado:', mId)
+          console.log('   - Data:', m.date)
+        }
+        
+        return match
+      })
+      
+      console.log('📊 [NEXT] Manutenções desta máquina:', forThisMachine.length)
+      
+      if (forThisMachine.length === 0) {
+        console.log('❌ [NEXT] Nenhuma manutenção agendada para esta máquina')
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+        return 'Não agendada'
+      }
+      
+      // ✅ Ordena por data (mais próxima primeiro)
+      const sorted = forThisMachine.sort((a, b) => {
+        const dateA = new Date(a.date)
+        const dateB = new Date(b.date)
+        return dateA - dateB
+      })
+      
+      const nextMaintenance = sorted[0]
+      
+      console.log('✅ [NEXT] Próxima manutenção encontrada:')
+      console.log('   - Data:', nextMaintenance.date)
+      console.log('   - Técnico:', nextMaintenance.technician)
+      console.log('   - Tipo:', nextMaintenance.type)
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+      
+      return formatDate(nextMaintenance.date)
     }
     
     const viewMachineHistory = (machine) => {
@@ -278,12 +331,7 @@ export default {
     }
     
     const scheduleMaintenance = (machine) => {
-      console.log('🟡 Agendando manutenção para:', machine)
-      
-      // ✅ Usa _id ou id
       const machineId = machine._id || machine.id
-      
-      console.log('🟡 Machine ID:', machineId)
       
       if (!machineId) {
         alert('Erro: ID da máquina não encontrado')
@@ -298,8 +346,6 @@ export default {
         type: 'Preventiva'
       }
       
-      console.log('🟡 newMaintenance.value:', newMaintenance.value)
-      
       showScheduleModal.value = true
     }
     
@@ -309,8 +355,28 @@ export default {
     }
     
     const saveScheduledMaintenance = async (maintenanceData) => {
-      await store.addMaintenance(maintenanceData)
-      closeScheduleModal()
+      try {
+        console.log('💾 [SAVE] Salvando manutenção...')
+        
+        await store.addMaintenance(maintenanceData)
+        
+        console.log('✅ [SAVE] Manutenção salva!')
+        console.log('🔄 [SAVE] Aguardando 1 segundo para reload...')
+        
+        // ✅ Aguarda 1 segundo e recarrega
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        
+        console.log('🔄 [SAVE] Recarregando manutenções...')
+        await store.fetchMaintenances()
+        
+        console.log('✅ [SAVE] Dados atualizados!')
+        console.log('📊 [SAVE] Total agendadas:', store.scheduledMaintenances.length)
+        
+        closeScheduleModal()
+      } catch (error) {
+        console.error('❌ [SAVE] Erro:', error)
+        alert('Erro ao agendar manutenção. Tente novamente.')
+      }
     }
     
     return {
