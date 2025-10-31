@@ -1,73 +1,14 @@
 import { defineStore } from 'pinia'
+import machineService from '../services/machineService'
 
 export const useMaintenanceStore = defineStore('maintenance', {
   state: () => ({
-    machines: [
-      { id: 1, name: 'M1', sector: 'Produção', status: 'verde', lastMaintenance: '2025-08-15' },
-      { id: 2, name: 'M2', sector: 'Produção', status: 'amarelo', lastMaintenance: '2025-08-10' },
-      { id: 3, name: 'M3', sector: 'Embalagem', status: 'vermelho', lastMaintenance: '2025-07-30' },
-      { id: 4, name: 'M4', sector: 'Produção', status: 'verde', lastMaintenance: '2025-08-20' },
-      { id: 5, name: 'M5', sector: 'Embalagem', status: 'amarelo', lastMaintenance: '2025-08-12' }
-    ],
-    maintenances: [
-      {
-        id: 1,
-        machineId: 1,
-        machine: 'M1',
-        date: '2025-08-15',
-        status: 'Concluída',
-        technician: 'João Silva',
-        type: 'Preventiva',
-        description: 'Lubrificação e inspeção geral',
-        sector: 'Produção'
-      },
-      {
-        id: 2,
-        machineId: 2,
-        machine: 'M2',
-        date: '2025-08-16',
-        status: 'Pendente',
-        technician: 'Maria Santos',
-        type: 'Preventiva',
-        description: 'Troca de filtros',
-        sector: 'Produção'
-      },
-      {
-        id: 3,
-        machineId: 3,
-        machine: 'M3',
-        date: '2025-08-17',
-        status: 'Em Andamento',
-        technician: 'Pedro Costa',
-        type: 'Corretiva',
-        description: 'Reparo no motor',
-        sector: 'Embalagem'
-      }
-    ],
-    scheduledMaintenances: [
-      {
-        id: 4,
-        machineId: 4,
-        machine: 'M4',
-        date: '2025-09-05',
-        status: 'Agendada',
-        technician: 'Ana Lima',
-        type: 'Preventiva',
-        description: 'Inspeção trimestral',
-        sector: 'Produção'
-      },
-      {
-        id: 5,
-        machineId: 5,
-        machine: 'M5',
-        date: '2025-09-07',
-        status: 'Agendada',
-        technician: 'Carlos Oliveira',
-        type: 'Preventiva',
-        description: 'Calibração de sensores',
-        sector: 'Embalagem'
-      }
-    ]
+    // Começa vazio e busca do MongoDB
+    machines: [],
+    maintenances: [],
+    scheduledMaintenances: [],
+    loading: false,
+    error: null
   }),
 
   getters: {
@@ -117,6 +58,66 @@ export const useMaintenanceStore = defineStore('maintenance', {
   },
 
   actions: {
+    // ✅ Busca máquinas do MongoDB
+    async fetchMachines() {
+      this.loading = true
+      this.error = null
+      
+      try {
+        const response = await machineService.getAll()
+        this.machines = response.data.data
+        return response.data
+      } catch (error) {
+        this.error = 'Erro ao buscar máquinas'
+        console.error('Erro ao buscar máquinas:', error)
+        throw error
+      } finally {
+        this.loading = false
+      }
+    },
+
+    // ✅ Busca manutenções do MongoDB
+    async fetchMaintenances() {
+      this.loading = true
+      this.error = null
+      
+      try {
+        // Por enquanto mantém dados mockados
+        // Quando criar maintenanceService, descomente e use:
+        // const response = await maintenanceService.getAll()
+        // this.maintenances = response.data.data.filter(m => m.status !== 'Agendada')
+        // this.scheduledMaintenances = response.data.data.filter(m => m.status === 'Agendada')
+        
+        this.maintenances = []
+        this.scheduledMaintenances = []
+        
+      } catch (error) {
+        this.error = 'Erro ao buscar manutenções'
+        console.error('Erro ao buscar manutenções:', error)
+        throw error
+      } finally {
+        this.loading = false
+      }
+    },
+
+    // ✅ Atualiza status de uma máquina específica
+    async updateMachineStatus(machineId, status) {
+      try {
+        const response = await machineService.updateStatus(machineId, status)
+        
+        // Atualiza a máquina localmente
+        const machine = this.machines.find(m => m._id === machineId || m.id === machineId)
+        if (machine) {
+          machine.status = status
+        }
+        
+        return response.data
+      } catch (error) {
+        console.error('Erro ao atualizar status:', error)
+        throw error
+      }
+    },
+
     addMaintenance(maintenance) {
       const newMaintenance = {
         id: Date.now(),
@@ -127,7 +128,7 @@ export const useMaintenanceStore = defineStore('maintenance', {
       this.maintenances.push(newMaintenance)
       
       // Atualiza status da máquina
-      const machine = this.machines.find(m => m.id === maintenance.machineId)
+      const machine = this.machines.find(m => (m.id || m._id) === maintenance.machineId)
       if (machine) {
         machine.lastMaintenance = newMaintenance.date
         machine.status = 'verde'
@@ -172,7 +173,7 @@ export const useMaintenanceStore = defineStore('maintenance', {
     },
 
     getMachineById(id) {
-      return this.machines.find(m => m.id === id)
+      return this.machines.find(m => (m.id || m._id) === id)
     },
 
     getMaintenancesByMachine(machineId) {
